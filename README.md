@@ -3,6 +3,6 @@ Air Quality Index (AQI) prediction system utilizing machine learning models trai
 
 # Team Members
 1. Kailash
-2.
-3.
-4.
+2. Taib Ahmed 
+3. Md. Zaid Khan
+4. Shalin Haldar
