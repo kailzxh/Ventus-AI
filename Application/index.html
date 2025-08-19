@@ -1,0 +1,336 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AQI Prediction Dashboard - India</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="header">
+        <div class="container">
+            <div class="header-content">
+                <h1>AQI Prediction Dashboard - India</h1>
+                <div class="header-info">
+                    <span id="current-date"></span>
+                    <div class="status status--info" id="data-status">Live Data</div>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <div class="main-layout">
+        <!-- Sidebar -->
+        <aside class="sidebar">
+            <div class="sidebar-content">
+                <h3>Filters</h3>
+                
+                <div class="filter-group">
+                    <label class="form-label">Select Cities</label>
+                    <select id="city-filter" class="form-control" multiple>
+                        <option value="Delhi">Delhi</option>
+                        <option value="Mumbai">Mumbai</option>
+                        <option value="Bangalore">Bangalore</option>
+                        <option value="Chennai">Chennai</option>
+                        <option value="Kolkata">Kolkata</option>
+                        <option value="Hyderabad">Hyderabad</option>
+                        <option value="Ahmedabad">Ahmedabad</option>
+                        <option value="Pune">Pune</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="form-label">Date Range</label>
+                    <select id="date-range" class="form-control">
+                        <option value="1m">Last Month</option>
+                        <option value="3m">Last 3 Months</option>
+                        <option value="6m" selected>Last 6 Months</option>
+                        <option value="1y">Last Year</option>
+                    </select>
+                </div>
+
+                <div class="filter-group">
+                    <label class="form-label">Pollutants</label>
+                    <div class="checkbox-group">
+                        <label><input type="checkbox" checked> PM2.5</label>
+                        <label><input type="checkbox" checked> PM10</label>
+                        <label><input type="checkbox"> NO2</label>
+                        <label><input type="checkbox"> SO2</label>
+                        <label><input type="checkbox"> CO</label>
+                        <label><input type="checkbox"> O3</label>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content -->
+        <main class="main-content">
+            <!-- Navigation Tabs -->
+            <nav class="tabs-nav">
+                <button class="tab-btn active" data-tab="overview">Overview</button>
+                <button class="tab-btn" data-tab="explorer">Data Explorer</button>
+                <button class="tab-btn" data-tab="predictions">Predictions</button>
+                <button class="tab-btn" data-tab="comparison">City Comparison</button>
+                <button class="tab-btn" data-tab="analytics">Analytics</button>
+            </nav>
+
+            <!-- Tab Contents -->
+            <div class="tab-content">
+                <!-- Overview Tab -->
+                <div id="overview" class="tab-panel active">
+                    <!-- Summary Cards -->
+                    <div class="summary-cards">
+                        <div class="card summary-card">
+                            <div class="card__body">
+                                <div class="summary-value">39,456</div>
+                                <div class="summary-label">Total Records</div>
+                            </div>
+                        </div>
+                        <div class="card summary-card">
+                            <div class="card__body">
+                                <div class="summary-value">18</div>
+                                <div class="summary-label">Cities Covered</div>
+                            </div>
+                        </div>
+                        <div class="card summary-card">
+                            <div class="card__body">
+                                <div class="summary-value">2015-2020</div>
+                                <div class="summary-label">Date Range</div>
+                            </div>
+                        </div>
+                        <div class="card summary-card">
+                            <div class="card__body">
+                                <div class="summary-value">185.4</div>
+                                <div class="summary-label">Average AQI</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current AQI Status -->
+                    <div class="card">
+                        <div class="card__header">
+                            <h2>Current AQI Status by City</h2>
+                        </div>
+                        <div class="card__body">
+                            <div class="aqi-grid" id="aqi-status-grid">
+                                <!-- AQI status cards will be generated by JavaScript -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Insights -->
+                    <div class="card">
+                        <div class="card__header">
+                            <h2>Quick Insights</h2>
+                        </div>
+                        <div class="card__body">
+                            <div class="insights-grid">
+                                <div class="insight-item">
+                                    <strong>Most Polluted City:</strong> Delhi (387 AQI)
+                                </div>
+                                <div class="insight-item">
+                                    <strong>Cleanest City:</strong> Coimbatore (67 AQI)
+                                </div>
+                                <div class="insight-item">
+                                    <strong>Cities in Severe Category:</strong> 3 cities
+                                </div>
+                                <div class="insight-item">
+                                    <strong>PM2.5 Correlation:</strong> 94% with AQI
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Data Explorer Tab -->
+                <div id="explorer" class="tab-panel">
+                    <div class="explorer-layout">
+                        <div class="card chart-card">
+                            <div class="card__header">
+                                <h2>AQI Trends Over Time</h2>
+                            </div>
+                            <div class="card__body">
+                                <div class="chart-container" style="position: relative; height: 400px;">
+                                    <canvas id="trends-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="charts-row">
+                            <div class="card chart-card">
+                                <div class="card__header">
+                                    <h3>Seasonal Patterns</h3>
+                                </div>
+                                <div class="card__body">
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="seasonal-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card chart-card">
+                                <div class="card__header">
+                                    <h3>AQI Distribution</h3>
+                                </div>
+                                <div class="card__body">
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="distribution-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card__header">
+                                <h3>Pollutant Correlations</h3>
+                            </div>
+                            <div class="card__body">
+                                <div class="correlations-grid" id="correlations-grid">
+                                    <!-- Correlation data will be generated by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Predictions Tab -->
+                <div id="predictions" class="tab-panel">
+                    <div class="predictions-layout">
+                        <div class="card">
+                            <div class="card__header">
+                                <h2>AQI Prediction</h2>
+                            </div>
+                            <div class="card__body">
+                                <div class="prediction-form">
+                                    <div class="form-group">
+                                        <label class="form-label">Select City</label>
+                                        <select id="predict-city" class="form-control">
+                                            <option value="Delhi">Delhi</option>
+                                            <option value="Mumbai">Mumbai</option>
+                                            <option value="Bangalore">Bangalore</option>
+                                            <option value="Chennai">Chennai</option>
+                                            <option value="Kolkata">Kolkata</option>
+                                            <option value="Hyderabad">Hyderabad</option>
+                                        </select>
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Prediction Date</label>
+                                        <input type="date" id="predict-date" class="form-control" value="2024-12-01">
+                                    </div>
+                                    <div class="form-group">
+                                        <label class="form-label">Season</label>
+                                        <select id="predict-season" class="form-control">
+                                            <option value="Winter">Winter</option>
+                                            <option value="Spring">Spring</option>
+                                            <option value="Summer">Summer</option>
+                                            <option value="Monsoon">Monsoon</option>
+                                        </select>
+                                    </div>
+                                    <button class="btn btn--primary" onclick="generatePrediction()">Predict AQI</button>
+                                </div>
+
+                                <div id="prediction-results" class="prediction-results hidden">
+                                    <div class="prediction-card">
+                                        <div class="prediction-value">
+                                            <span id="predicted-aqi">--</span>
+                                            <span class="prediction-category" id="predicted-category">--</span>
+                                        </div>
+                                        <div class="confidence-interval">
+                                            Confidence Interval: <span id="confidence-range">--</span>
+                                        </div>
+                                    </div>
+                                    <div class="chart-container" style="position: relative; height: 300px;">
+                                        <canvas id="prediction-chart"></canvas>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card__header">
+                                <h3>Model Performance</h3>
+                            </div>
+                            <div class="card__body">
+                                <div class="model-metrics" id="model-metrics">
+                                    <!-- Model metrics will be generated by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- City Comparison Tab -->
+                <div id="comparison" class="tab-panel">
+                    <div class="comparison-layout">
+                        <div class="card">
+                            <div class="card__header">
+                                <h2>Multi-City AQI Comparison</h2>
+                            </div>
+                            <div class="card__body">
+                                <div class="chart-container" style="position: relative; height: 400px;">
+                                    <canvas id="comparison-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="card">
+                            <div class="card__header">
+                                <h3>City Rankings</h3>
+                            </div>
+                            <div class="card__body">
+                                <div class="rankings-table" id="rankings-table">
+                                    <!-- Rankings will be generated by JavaScript -->
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Analytics Tab -->
+                <div id="analytics" class="tab-panel">
+                    <div class="analytics-layout">
+                        <div class="card">
+                            <div class="card__header">
+                                <h2>Advanced Analytics</h2>
+                            </div>
+                            <div class="card__body">
+                                <div class="chart-container" style="position: relative; height: 400px;">
+                                    <canvas id="analytics-chart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="cards-row">
+                            <div class="card">
+                                <div class="card__header">
+                                    <h3>Feature Importance</h3>
+                                </div>
+                                <div class="card__body">
+                                    <div class="feature-importance" id="feature-importance">
+                                        <!-- Feature importance will be generated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="card">
+                                <div class="card__header">
+                                    <h3>Anomaly Detection</h3>
+                                </div>
+                                <div class="card__body">
+                                    <div class="anomaly-list" id="anomaly-list">
+                                        <!-- Anomalies will be generated by JavaScript -->
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
