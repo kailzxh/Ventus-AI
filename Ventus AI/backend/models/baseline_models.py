@@ -2,18 +2,22 @@
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.linear_model import LinearRegression
 from sklearn.svm import SVR
-from xgboost import XGBRegressor
-from lightgbm import LGBMRegressor
+from xgboost import XGBRegressor  # <-- NEW
+from lightgbm import LGBMRegressor # <-- NEW
 from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import numpy as np
 import joblib
 
 class BaselineModels:
     def __init__(self):
+        # UPDATED: Removed simple params, added new models
+        # Tuning should happen in the training script
         self.models = {
-            'random_forest': RandomForestRegressor(n_estimators=50, random_state=42, n_jobs=-1),
-            'gradient_boosting': GradientBoostingRegressor(n_estimators=50, random_state=42),
+            'random_forest': RandomForestRegressor(random_state=42, n_jobs=-1),
+            'gradient_boosting': GradientBoostingRegressor(random_state=42),
             'linear_regression': LinearRegression(),
+            'xgboost': XGBRegressor(random_state=42, n_jobs=-1),
+            'lightgbm': LGBMRegressor(random_state=42, n_jobs=-1)
         }
         self.trained_models = {}
         
@@ -26,18 +30,21 @@ class BaselineModels:
         for name, model in self.models.items():
             print(f"   Training {name}...")
             
-            # Train model
-            model.fit(X_train, y_train)
-            self.trained_models[name] = model
-            
-            # Make predictions
-            y_pred = model.predict(X_test)
-            
-            # Calculate metrics
-            metrics = self._calculate_metrics(y_test, y_pred)
-            results[name] = metrics
-            
-            print(f"   ✅ {name}: RMSE={metrics['RMSE']:.2f}, R2={metrics['R2']:.3f}")
+            try:
+                # Train model
+                model.fit(X_train, y_train)
+                self.trained_models[name] = model
+                
+                # Make predictions
+                y_pred = model.predict(X_test)
+                
+                # Calculate metrics
+                metrics = self._calculate_metrics(y_test, y_pred)
+                results[name] = metrics
+                
+                print(f"   ✅ {name}: RMSE={metrics['RMSE']:.2f}, R2={metrics['R2']:.3f}")
+            except Exception as e:
+                print(f"   ❌ Error training {name}: {e}")
         
         return results
     

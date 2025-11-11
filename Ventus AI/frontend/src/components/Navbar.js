@@ -2,7 +2,7 @@
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAQI } from '../context/AQIContext';
-import { Home, TrendingUp, BarChart3, Map, RefreshCw, Settings, Activity, AlertTriangle } from 'lucide-react';
+import { Home, TrendingUp, BarChart3, Map, RefreshCw } from 'lucide-react';
 
 const Navbar = () => {
   const location = useLocation();
@@ -13,9 +13,6 @@ const Navbar = () => {
     { name: 'Predictions', href: '/predictions', icon: TrendingUp },
     { name: 'City Comparison', href: '/comparison', icon: Map },
     { name: 'Analytics', href: '/analytics', icon: BarChart3 },
-    { name: 'Real-time Monitor', href: '/realtime', icon: Activity },
-    { name: 'System Health', href: '/system', icon: AlertTriangle },
-    { name: 'Settings', href: '/settings', icon: Settings },
   ];
 
   const isActive = (path) => location.pathname === path;

@@ -1,6 +1,9 @@
 # backend/config.py
 import os
 from datetime import timedelta
+from dotenv import load_dotenv  # <-- 1. IMPORT THIS
+
+load_dotenv()  # <-- 2. ADD THIS LINE TO LOAD THE .ENV FILE
 
 class Config:
     # Flask Configuration
@@ -18,6 +21,7 @@ class Config:
     MODEL_PATH = 'data/models/'
     
     # Real-time API Configuration
+    # These will now correctly load from your .env file
     AQICN_API_KEY = os.environ.get('AQICN_API_KEY', 'demo')
     OPENWEATHER_API_KEY = os.environ.get('OPENWEATHER_API_KEY', '')
     
@@ -25,23 +29,110 @@ class Config:
     PREDICTION_DAYS = 7
     MODEL_UPDATE_FREQUENCY = timedelta(hours=6)
 
-# Add this to your existing config.py
+# --- NEW AND UPDATED CONFIGURATIONS BELOW ---
+
 REALTIME_UPDATE_INTERVAL = 300  # 5 minutes
 MAX_API_RETRIES = 3
 API_TIMEOUT = 10
 
 # Indian cities coordinates (for fallback)
+# *** UPDATED: Keys are now the canonical lowercase names ***
 CITY_COORDINATES = {
-    'Delhi': (28.6139, 77.2090),
-    'Mumbai': (19.0760, 72.8777),
-    'Bangalore': (12.9716, 77.5946),
-    'Chennai': (13.0827, 80.2707),
-    'Kolkata': (22.5726, 88.3639),
-    'Hyderabad': (17.3850, 78.4867)
+    'delhi': (28.6139, 77.2090),
+    'mumbai': (19.0760, 72.8777),
+    'bengaluru': (12.9716, 77.5946),
+    'chennai': (13.0827, 80.2707),
+    'kolkata': (22.5726, 88.3639),
+    'hyderabad': (17.3850, 78.4867),
+    'ahmedabad': (23.0225, 72.5714),
+    'pune': (18.5204, 73.8567),
 }
 
-# Indian cities for real-time data collection
-# In config.py - expand the INDIAN_CITIES list
+# 1. *** NEW: THE SINGLE SOURCE OF TRUTH: CITY NORMALIZATION MAP ***
+# All keys should be lowercase. All values are the canonical name.
+CITY_NORMALIZATION_MAP = {
+    # Delhi
+    'delhi': 'delhi',
+    'new delhi': 'delhi',
+    'nct': 'delhi',
+    'delhi nct': 'delhi',
+    
+    # Mumbai
+    'mumbai': 'mumbai',
+    'bombay': 'mumbai',
+    'navi mumbai': 'mumbai',
+    
+    # Bengaluru
+    'bangalore': 'bengaluru',
+    'bengaluru': 'bengaluru',
+    
+    # Chennai
+    'chennai': 'chennai',
+    'madras': 'chennai',
+    
+    # Kolkata
+    'kolkata': 'kolkata',
+    'calcutta': 'kolkata',
+    'howrah': 'kolkata', # Often considered part of Kolkata metro
+    
+    # Other Major Cities
+    'hyderabad': 'hyderabad',
+    'ahmedabad': 'ahmedabad',
+    'pune': 'pune',
+    'poona': 'pune',
+    'surat': 'surat',
+    'jaipur': 'jaipur',
+    'lucknow': 'lucknow',
+    'kanpur': 'kanpur',
+    'cawnpore': 'kanpur',
+    'nagpur': 'nagpur',
+    'indore': 'indore',
+    'thane': 'thane',
+    'bhopal': 'bhopal',
+    'visakhapatnam': 'visakhapatnam',
+    'vizag': 'visakhapatnam',
+    'patna': 'patna',
+    'vadodara': 'vadodara',
+    'baroda': 'vadodara',
+    'ghaziabad': 'ghaziabad',
+    'ludhiana': 'ludhiana',
+    'agra': 'agra',
+    'nashik': 'nashik',
+    'nasik': 'nashik',
+    'faridabad': 'faridabad',
+    'meerut': 'meerut',
+    'rajkot': 'rajkot',
+    'kalyan-dombivli': 'kalyan-dombivli',
+    'kalyan': 'kalyan-dombivli',
+    'dombivli': 'kalyan-dombivli',
+    'vasai-virar': 'vasai-virar',
+    'vasai': 'vasai-virar',
+    'virar': 'vasai-virar',
+    'varanasi': 'varanasi',
+    'benares': 'varanasi',
+    'banaras': 'varanasi',
+    'srinagar': 'srinagar',
+    'aurangabad': 'aurangabad',
+    'dhanbad': 'dhanbad',
+    'amritsar': 'amritsar',
+    'allahabad': 'prayagraj',
+    'prayagraj': 'prayagraj',
+    'ranchi': 'ranchi',
+    'coimbatore': 'coimbatore',
+    'jabalpur': 'jabalpur',
+    'gwalior': 'gwalior',
+    'vijayawada': 'vijayawada',
+    'jodhpur': 'jodhpur',
+    'madurai': 'madurai',
+    'raipur': 'raipur',
+    'kota': 'kota',
+    'chandigarh': 'chandigarh'
+}
+
+# 2. *** NEW: LIST OF ALL VALID CANONICAL CITY NAMES FOR FILTERING ***
+NORMALIZED_CITIES = sorted(list(set(CITY_NORMALIZATION_MAP.values())))
+
+# 3. *** UPDATED: This list is now just for reference. The map is the primary source. ***
 INDIAN_CITIES = [
     'Delhi', 'New Delhi', 'NCT', 'Delhi NCT',
     'Mumbai', 'Bombay', 
@@ -90,5 +181,3 @@ INDIAN_CITIES = [
     'Kota',
     'Chandigarh'
 ]
-
-

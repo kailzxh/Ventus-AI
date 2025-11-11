@@ -6,7 +6,8 @@ from datetime import datetime, timedelta
 import time
 import json
 import os
-from config import Config, INDIAN_CITIES
+# --- FIX: Import the normalization map ---
+from config import Config, INDIAN_CITIES, CITY_NORMALIZATION_MAP
 
 class RealTimeAQI:
     """
@@ -28,7 +29,15 @@ class RealTimeAQI:
         }
         self.cache = {}
         self.cache_timeout = 300  # 5 minutes cache
+        # --- FIX: Add the city map ---
+        self.city_map = CITY_NORMALIZATION_MAP
     
+    # --- FIX: Add a helper function ---
+    def _get_canonical_city(self, city):
+        """Helper to normalize city names."""
+        # Get the canonical name, or default to the lowercased version
+        return self.city_map.get(str(city).lower(), str(city).lower())
+
     def fetch_realtime_aqi(self, cities=None):
         """
         Fetch real-time AQI data for specified cities
@@ -109,8 +118,12 @@ class RealTimeAQI:
                 if data.get('status') == 'ok':
                     aqi_data = data['data']
                     
+                    # --- FIX: Get the canonical name ---
+                    canonical_city = self._get_canonical_city(city)
+                    
                     return {
-                        'City': city,
+                        # --- FIX: Store the canonical name ---
+                        'City': canonical_city,
                         'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                         'AQI': aqi_data.get('aqi', 0),
                         'PM2.5': self._extract_pollutant_value(aqi_data, 'pm25'),
@@ -171,8 +184,12 @@ class RealTimeAQI:
                             # Convert OpenWeather AQI to standard AQI
                             aqi_value = self._convert_openweather_aqi(main_aqi)
                             
+                            # --- FIX: Get the canonical name ---
+                            canonical_city = self._get_canonical_city(city)
+                            
                             return {
-                                'City': city,
+                                # --- FIX: Store the canonical name ---
+                                'City': canonical_city,
                                 'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
                                 'AQI': aqi_value,
                                 'PM2.5': components.get('pm2_5', 0),
@@ -192,17 +209,22 @@ class RealTimeAQI:
 
     def _generate_realistic_data(self, city):
         """Generate realistic AQI data when APIs are unavailable"""
-        # City-specific base AQI levels (based on real Indian city data)
+        
+        # --- FIX: Normalize the city *before* lookup ---
+        canonical_city = self._get_canonical_city(city)
+
+        # --- FIX: Keys must be lowercase to match canonical names ---
         base_aqi_levels = {
-            'Delhi': 280, 'Mumbai': 160, 'Bangalore': 120, 'Chennai': 140,
-            'Kolkata': 220, 'Hyderabad': 130, 'Ahmedabad': 180, 'Pune': 110,
-            'Surat': 150, 'Jaipur': 170, 'Lucknow': 260, 'Kanpur': 290,
-            'Nagpur': 140, 'Indore': 130, 'Thane': 150, 'Bhopal': 120,
-            'Visakhapatnam': 110, 'Patna': 240, 'Vadodara': 160, 'Ghaziabad': 270,
-            'Ludhiana': 190, 'Agra': 200, 'Nashik': 130, 'Faridabad': 250
+            'delhi': 280, 'mumbai': 160, 'bengaluru': 120, 'chennai': 140,
+            'kolkata': 220, 'hyderabad': 130, 'ahmedabad': 180, 'pune': 110,
+            'surat': 150, 'jaipur': 170, 'lucknow': 260, 'kanpur': 290,
+            'nagpur': 140, 'indore': 130, 'thane': 150, 'bhopal': 120,
+            'visakhapatnam': 110, 'patna': 240, 'vadodara': 160, 'ghaziabad': 270,
+            'ludhiana': 190, 'agra': 200, 'nashik': 130, 'faridabad': 250
         }
         
-        base_aqi = base_aqi_levels.get(city, 150)
+        # Use the canonical city for the lookup
+        base_aqi = base_aqi_levels.get(canonical_city, 150)
         
         # Add time-based variation
         hour = datetime.now().hour
@@ -216,7 +238,8 @@ class RealTimeAQI:
         aqi = max(50, min(500, base_aqi + variation))
         
         return {
-            'City': city,
+            # --- FIX: Store the canonical name ---
+            'City': canonical_city,
             'Date': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
             'AQI': int(aqi),
             'PM2.5': int(aqi * 0.48 + np.random.normal(0, 8)),

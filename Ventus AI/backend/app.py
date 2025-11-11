@@ -9,7 +9,6 @@ import json
 import os
 import traceback
 
-# Custom JSON encoder to handle numpy types
 class CustomJSONEncoder(json.JSONEncoder):
     def default(self, obj):
         if isinstance(obj, np.integer):
@@ -18,8 +17,13 @@ class CustomJSONEncoder(json.JSONEncoder):
             return float(obj)
         elif isinstance(obj, np.ndarray):
             return obj.tolist()
+        # *** ADDED: Handle NaT values gracefully for JSON ***
+        elif pd.isna(obj):
+            return None
         return super().default(obj)
-from config import Config
+
+# *** IMPORT THE NEW NORMALIZATION MAPS ***
+from config import Config, CITY_NORMALIZATION_MAP, NORMALIZED_CITIES
 from data_loader import ComprehensiveAQIDataLoader
 from preprocessor import AQIPreprocessor
 from prediction import AQIPredictor
@@ -50,6 +54,11 @@ realtime_aqi = RealTimeAQI()  # Add realtime instance
 historical_data = None
 realtime_data = None
 system_initialized = False
+
+# *** ADDED: Pass the data_loader to the predictor ***
+# This is critical for the predictor to access station metadata
+predictor.set_data_loader(data_loader)
+
 
 class HealthCheck(Resource):
     def get(self):
@@ -93,22 +102,28 @@ class CurrentAQI(Resource):
                 city_name = row['City']
                 current_aqi = row['AQI']
                 
-                # Get model prediction for today
-                today_prediction = predictor.predict_aqi(
-                    city=city_name,
-                    date=datetime.now().date(),
-                    historical_data=historical_data,
-                    model_type='nf_vae'  # Use NF-VAE for real-time comparison
-                )
-                
-                # Get model prediction for tomorrow
-                tomorrow_prediction = predictor.predict_aqi(
-                    city=city_name,
-                    date=datetime.now().date() + timedelta(days=1),
-                    historical_data=historical_data,
-                    model_type='nf_vae'
-                )
-                
+                try:
+                    # *** ADDED: Handle errors for individual city predictions ***
+                    # Get model prediction for today
+                    today_prediction = predictor.predict_aqi(
+                        city=city_name,
+                        date=datetime.now().date(),
+                        historical_data=historical_data,
+                        model_type='auto' # Use auto for best model
+                    )
+                    
+                    # Get model prediction for tomorrow
+                    tomorrow_prediction = predictor.predict_aqi(
+                        city=city_name,
+                        date=datetime.now().date() + timedelta(days=1),
+                        historical_data=historical_data,
+                        model_type='auto' # Use auto for best model
+                    )
+                except ValueError as ve:
+                    # City not found in our system, skip it
+                    print(f"⚠️ Skipping city {city_name} from real-time feed: {ve}")
+                    continue
+
                 cities_data.append({
                     'city': city_name,
                     'current_aqi': current_aqi,
@@ -134,9 +149,12 @@ class CurrentAQI(Resource):
         """Calculate prediction accuracy percentage"""
         if actual == 0 or predicted == 0:
             return 0
-        error = abs(actual - predicted) / actual
-        accuracy = max(0, 100 - (error * 100))
-        return round(accuracy, 1)
+        try:
+            error = abs(actual - predicted) / actual
+            accuracy = max(0, 100 - (error * 100))
+            return round(accuracy, 1)
+        except Exception:
+            return 0
 
 class PredictAQI(Resource):
     def post(self):
@@ -148,18 +166,24 @@ class PredictAQI(Resource):
                 return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
                 
             data = request.get_json()
+            if not data:
+                return {'error': 'Invalid JSON body'}, 400
+                
             city = data.get('city', 'Delhi')
             date_str = data.get('date', datetime.now().strftime('%Y-%m-%d'))
             model_type = data.get('model_type', 'auto')
             
             date = datetime.strptime(date_str, '%Y-%m-%d').date()
             
+            # *** UPDATED: Call to predictor.predict_aqi ***
+            # This call is now wrapped in a specific ValueError catch
             prediction = predictor.predict_aqi(
                 city=city,
                 date=date,
                 historical_data=historical_data,
                 model_type=model_type
             )
+            
             # If predictor returns a pandas Series accidentally, convert to dict
             if isinstance(prediction, pd.Series):
                 prediction = prediction.to_dict()
@@ -180,20 +204,34 @@ class PredictAQI(Resource):
                         }
                 return _to_native(prediction)
             else:
+                # This case should be rare, as errors are now exceptions
                 return {'error': 'Prediction failed'}, 400
                 
+        # *** FIX for Failure 5: Catch specific ValueErrors (e.g., "City not found") ***
+        except ValueError as ve:
+            app.logger.warning(f"Prediction failed for {city}: {str(ve)}")
+            return {'error': str(ve)}, 404 # Return 404 Not Found
+            
         except Exception as e:
             app.logger.error(f"Error in PredictAQI: {str(e)}")
-            return {'error': str(e)}, 500
+            traceback.print_exc()
+            return {'error': 'An internal server error occurred'}, 500
     
     def _get_realtime_city_data(self, city):
         """Get real-time data for a specific city"""
         global realtime_data
         try:
             if realtime_data is None:
-                realtime_data = realtime_aqi.fetch_realtime_aqi([city])
+                realtime_data = realtime_aqi.fetch_realtime_aqi() # Fetch all
             
-            city_data = realtime_data[realtime_data['City'] == city]
+            # *** Use canonical name for lookup ***
+            canonical_city = predictor._normalize_city(city)
+            if not canonical_city:
+                return None
+                
+            # Note: realtime_aqi.fetch_realtime_aqi() should also be normalizing
+            # its output. Assuming it returns canonical names.
+            city_data = realtime_data[realtime_data['City'] == canonical_city]
             if len(city_data) > 0:
                 # Return native dict instead of pandas Series
                 return _to_native(city_data.iloc[0])
@@ -206,9 +244,12 @@ class PredictAQI(Resource):
         """Calculate prediction accuracy percentage"""
         if actual == 0 or predicted == 0:
             return 0
-        error = abs(actual - predicted) / actual
-        accuracy = max(0, 100 - (error * 100))
-        return round(accuracy, 1)
+        try:
+            error = abs(actual - predicted) / actual
+            accuracy = max(0, 100 - (error * 100))
+            return round(accuracy, 1)
+        except Exception:
+            return 0
 
 class FuturePredictions(Resource):
     def get(self, city):
@@ -221,33 +262,39 @@ class FuturePredictions(Resource):
                 
             days = request.args.get('days', 7, type=int)
             
+            # *** UPDATED: Call now wrapped in error handler ***
             predictions = predictor.predict_future_aqi(
                 city=city,
                 days=days,
                 historical_data=historical_data
             )
             
-            return _to_native({'city': city, 'predictions': predictions})
+            # The 'city' in response will be the *canonical* one from prediction.py
+            return _to_native({'city_requested': city, 'predictions': predictions})
             
+        # *** FIX for Failure 5: Catch specific ValueErrors (e.g., "City not found") ***
+        except ValueError as ve:
+            app.logger.warning(f"Future prediction failed for {city}: {str(ve)}")
+            return {'error': str(ve)}, 404 # Return 404 Not Found
+
         except Exception as e:
             app.logger.error(f"Error in FuturePredictions: {str(e)}")
-            return {'error': str(e)}, 500
+            return {'error': 'An internal server error occurred'}, 500
 
 class CityList(Resource):
     def get(self):
         """Get list of available cities"""
         try:
-            global historical_data, system_initialized
+            global system_initialized
             
             if not system_initialized:
                 return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
                 
-            if historical_data is not None and 'City' in historical_data.columns:
-                cities = sorted(historical_data['City'].unique().tolist())
-                return {'cities': cities, 'count': len(cities)}
-            else:
-                return {'cities': [], 'count': 0}
-                
+            # *** FIX: Use the canonical city list from config ***
+            # This is faster and more correct than querying the DataFrame
+            cities = NORMALIZED_CITIES
+            return {'cities': cities, 'count': len(cities)}
+            
         except Exception as e:
             app.logger.error(f"Error in CityList: {str(e)}")
             return {'error': str(e)}, 500
@@ -273,12 +320,16 @@ class CityComparison(Resource):
                 city_name = row['City']
                 current_aqi = row.get('AQI', 0)
                 
-                # Get prediction for tomorrow
-                tomorrow_prediction = predictor.predict_aqi(
-                    city=city_name,
-                    date=datetime.now().date() + timedelta(days=1),
-                    historical_data=historical_data
-                )
+                try:
+                    # *** ADDED: Handle errors for individual city predictions ***
+                    tomorrow_prediction = predictor.predict_aqi(
+                        city=city_name,
+                        date=datetime.now().date() + timedelta(days=1),
+                        historical_data=historical_data
+                    )
+                except ValueError as ve:
+                    print(f"⚠️ Skipping city {city_name} from real-time feed: {ve}")
+                    continue
                 
                 comparison_data.append({
                     'city': city_name,
@@ -309,29 +360,9 @@ class ModelPerformance(Resource):
             if not system_initialized:
                 return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
                 
-            # Load actual performance data from file
-            performance_file = 'data/models/model_performance.json'
-            nf_vae_performance_file = 'data/models/nf_vae_performance.json'
-            
-            performance_data = {}
-            
-            # Load baseline model performance
-            if os.path.exists(performance_file):
-                try:
-                    with open(performance_file, 'r') as f:
-                        baseline_performance = json.load(f)
-                    performance_data.update(baseline_performance.get('models', {}))
-                except Exception as e:
-                    app.logger.warning(f"Could not load baseline performance: {e}")
-            
-            # Load NF-VAE performance
-            if os.path.exists(nf_vae_performance_file):
-                try:
-                    with open(nf_vae_performance_file, 'r') as f:
-                        nf_vae_performance = json.load(f)
-                    performance_data['nf_vae'] = nf_vae_performance.get('nf_vae', {})
-                except Exception as e:
-                    app.logger.warning(f"Could not load NF-VAE performance: {e}")
+            # This logic is fine, but it relies on JSON files
+            # A better approach would be to get this from the predictor object
+            performance_data = predictor.get_model_performance()
             
             if performance_data:
                 return {'model_performance': performance_data}
@@ -356,13 +387,8 @@ class AvailableModels(Resource):
             if not system_initialized:
                 return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
                 
-            models = []
-            if hasattr(predictor, 'get_available_models'):
-                models = predictor.get_available_models()
-            elif hasattr(predictor, 'models'):
-                models = list(predictor.models.keys())
-            
-            default_model = getattr(predictor, 'default_model', 'simple')
+            models = predictor.get_available_models()
+            default_model = predictor.default_model
             
             return {
                 'available_models': models,
@@ -378,6 +404,7 @@ class AvailableModels(Resource):
         except Exception as e:
             app.logger.error(f"Error in AvailableModels: {str(e)}")
             return {'error': str(e)}, 500
+
 class InitializeSystem(Resource):
     def post(self):
         """Manually initialize the system"""
@@ -385,17 +412,22 @@ class InitializeSystem(Resource):
         try:
             print("🚀 Initializing AQI Prediction System...")
             
+            # *** ADDED: Set the data loader in the predictor ***
+            # This MUST happen before loading data or models
+            predictor.set_data_loader(data_loader)
+            
             # Load and preprocess historical data
             print("📥 Loading historical data...")
             historical_data = data_loader.load_historical_data()
             if historical_data is not None and len(historical_data) > 0:
                 print(f"📊 Raw data loaded: {len(historical_data):,} records")
+                # Preprocessing is now more lightweight, as normalization is in the loader
                 historical_data = preprocessor.preprocess_data(historical_data, for_training=False)
                 print(f"✅ Preprocessed data: {len(historical_data):,} records")
                 
                 if historical_data is not None and 'City' in historical_data.columns:
                     cities = historical_data['City'].unique()
-                    print(f"🏙️  Cities available: {len(cities)}")
+                    print(f"🏙️  Cities available: {len(cities)} (Normalized)")
                 else:
                     print("⚠️  No City column in processed data")
             else:
@@ -444,16 +476,8 @@ class SystemStatus(Resource):
         global system_initialized, historical_data, realtime_data
         
         try:
-            available_models = []
-            default_model = 'unknown'
-            
-            if hasattr(predictor, 'get_available_models'):
-                available_models = predictor.get_available_models()
-            elif hasattr(predictor, 'models'):
-                available_models = list(predictor.models.keys())
-            
-            if hasattr(predictor, 'default_model'):
-                default_model = predictor.default_model
+            available_models = predictor.get_available_models()
+            default_model = predictor.default_model
             
             cities_available = 0
             if historical_data is not None and 'City' in historical_data.columns:
@@ -492,29 +516,39 @@ class RealtimeComparison(Resource):
             if not system_initialized:
                 return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
             
+            # *** FIX: Use canonical city name for lookup ***
+            canonical_city = predictor._normalize_city(city)
+            if not canonical_city:
+                   raise ValueError(f"City '{city}' not found or not supported.")
+
             # Get real-time data for the city
             if realtime_data is None:
-                realtime_data = realtime_aqi.fetch_realtime_aqi([city])
+                realtime_data = realtime_aqi.fetch_realtime_aqi()
             
-            city_realtime = realtime_data[realtime_data['City'] == city]
+            city_realtime = realtime_data[realtime_data['City'] == canonical_city] # Match normalized
+            
+            # *** THIS IS THE LINE CAUSING YOUR ERROR ***
+            # The 'realtime_data' DataFrame doesn't have a row for 'delhi',
+            # so 'city_realtime' is empty.
             if len(city_realtime) == 0:
-                return {'error': f'No real-time data available for {city}'}, 404
+                return {'error': f'No real-time data available for {city} (normalized: {canonical_city})'}, 404
             
             realtime_row = city_realtime.iloc[0]
             current_aqi = realtime_row['AQI']
             
             # Get predictions for different timeframes
             predictions = {
-                'today': predictor.predict_aqi(city, datetime.now().date(), historical_data, 'nf_vae'),
-                'tomorrow': predictor.predict_aqi(city, datetime.now().date() + timedelta(days=1), historical_data, 'nf_vae'),
-                'next_week': predictor.predict_aqi(city, datetime.now().date() + timedelta(days=7), historical_data, 'nf_vae')
+                'today': predictor.predict_aqi(city, datetime.now().date(), historical_data, 'auto'),
+                'tomorrow': predictor.predict_aqi(city, datetime.now().date() + timedelta(days=1), historical_data, 'auto'),
+                'next_week': predictor.predict_aqi(city, datetime.now().date() + timedelta(days=7), historical_data, 'auto')
             }
             
             # Calculate accuracy for today's prediction
             today_accuracy = self._calculate_accuracy(current_aqi, predictions['today'].get('predicted_aqi', 0))
             
             comparison = {
-                'city': city,
+                'city': canonical_city,
+                'city_requested': city,
                 'realtime': {
                     'aqi': current_aqi,
                     'category': predictor._get_aqi_category(current_aqi),
@@ -533,24 +567,37 @@ class RealtimeComparison(Resource):
             }
             
             return _to_native(comparison)
+
+        # *** FIX for Failure 5: Catch specific ValueErrors (e.g., "City not found") ***
+        except ValueError as ve:
+            app.logger.warning(f"Realtime comparison failed for {city}: {str(ve)}")
+            return {'error': str(ve)}, 404 # Return 404 Not Found
             
         except Exception as e:
             app.logger.error(f"Error in RealtimeComparison: {str(e)}")
-            return {'error': str(e)}, 500
+            return {'error': 'An internal server error occurred'}, 500
     
     def _calculate_accuracy(self, actual, predicted):
         """Calculate prediction accuracy percentage"""
         if actual == 0 or predicted == 0:
             return 0
-        error = abs(actual - predicted) / actual
-        accuracy = max(0, 100 - (error * 100))
-        return round(accuracy, 1)
+        try:
+            error = abs(actual - predicted) / actual
+            accuracy = max(0, 100 - (error * 100))
+            return round(accuracy, 1)
+        except Exception:
+            return 0
     
     def _analyze_trend(self, current_aqi, predictions):
         """Analyze AQI trend based on predictions"""
-        today_pred = predictions['today'].get('predicted_aqi', current_aqi)
-        tomorrow_pred = predictions['tomorrow'].get('predicted_aqi', today_pred)
-        next_week_pred = predictions['next_week'].get('predicted_aqi', tomorrow_pred)
+        today_pred = predictions.get('today', {}).get('predicted_aqi', current_aqi)
+        tomorrow_pred = predictions.get('tomorrow', {}).get('predicted_aqi', today_pred)
+        next_week_pred = predictions.get('next_week', {}).get('predicted_aqi', tomorrow_pred)
+        
+        # Handle None values
+        current_aqi = current_aqi or 0
+        tomorrow_pred = tomorrow_pred or 0
+        next_week_pred = next_week_pred or 0
         
         short_term_trend = 'improving' if tomorrow_pred < current_aqi else 'worsening'
         long_term_trend = 'improving' if next_week_pred < current_aqi else 'worsening'
@@ -599,7 +646,7 @@ def home():
         },
         'note': 'System must be initialized via /api/initialize before making predictions'
     })
-   
+    
 
 def _to_native(obj):
     """Recursively convert numpy/pandas types to native Python types for JSON serialization."""
@@ -624,6 +671,9 @@ def _to_native(obj):
             return _to_native(obj.to_dict())
         if isinstance(obj, _pd.DataFrame):
             return _to_native(obj.to_dict(orient='records'))
+        # *** ADDED: Handle NaT values ***
+        if _pd.isna(obj):
+            return None
     except Exception:
         pass
 
@@ -635,8 +685,8 @@ def _to_native(obj):
 
     # Datetime
     try:
-        from datetime import datetime as _dt
-        if isinstance(obj, _dt):
+        from datetime import datetime as _dt, date as _date
+        if isinstance(obj, (_dt, _date)):
             return obj.isoformat()
     except Exception:
         pass
@@ -713,6 +763,9 @@ class StationPredictions(Resource):
                 return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
                 
             data = request.get_json()
+            if not data:
+                return {'error': 'Invalid JSON body'}, 400
+                
             city = data.get('city', 'Delhi')
             date_str = data.get('date', datetime.now().strftime('%Y-%m-%d'))
             model_type = data.get('model_type', 'auto')
@@ -728,21 +781,12 @@ class StationPredictions(Resource):
                 model_type=model_type
             )
             
-            # Add city-level prediction if requested
-            if include_city_level:
-                city_prediction = predictor.predict_aqi(
-                    city=city,
-                    date=date,
-                    historical_data=historical_data,
-                    model_type=model_type
-                )
-                # Mark city-level prediction
-                city_prediction['prediction_type'] = 'city_level'
-                city_prediction['station'] = 'City Average'
-                station_predictions.append(city_prediction)
+            # *** FIX: We no longer need to manually add city-level ***
+            # The new `predict_aqi_for_all_stations` already includes it.
             
             return _to_native({
-                'city': city,
+                'city': predictor._normalize_city(city) or city, # Return canonical city
+                'city_requested': city,
                 'date': date_str,
                 'total_predictions': len(station_predictions),
                 'station_predictions': len([p for p in station_predictions if p.get('prediction_type') == 'station_level']),
@@ -750,90 +794,133 @@ class StationPredictions(Resource):
                 'summary': self._create_summary(station_predictions)
             })
                 
+        # *** FIX for Failure 5: Catch specific ValueErrors (e.g., "City not found") ***
+        except ValueError as ve:
+            app.logger.warning(f"Station prediction failed for {city}: {str(ve)}")
+            return {'error': str(ve)}, 404 # Return 404 Not Found
+            
         except Exception as e:
             app.logger.error(f"Error in StationPredictions: {str(e)}")
-            return {'error': str(e)}, 500
+            return {'error': 'An internal server error occurred'}, 500
     
     def _create_summary(self, predictions):
         """Create summary statistics for station predictions"""
         if not predictions:
             return {}
         
-        aqi_values = [p['predicted_aqi'] for p in predictions]
-        categories = [p['category'] for p in predictions]
+        # *** FIX: Filter for station_level predictions only for stats ***
+        station_preds = [p for p in predictions if p.get('prediction_type') == 'station_level']
+        if not station_preds:
+            return {'average_aqi': 0, 'min_aqi': 0, 'max_aqi': 0}
+
+        aqi_values = [p['predicted_aqi'] for p in station_preds]
+        categories = [p['category'] for p in station_preds]
         
         return {
             'average_aqi': round(np.mean(aqi_values), 2),
             'min_aqi': round(min(aqi_values), 2),
             'max_aqi': round(max(aqi_values), 2),
             'category_distribution': {cat: categories.count(cat) for cat in set(categories)},
-            'worst_station': max(predictions, key=lambda x: x['predicted_aqi']),
-            'best_station': min(predictions, key=lambda x: x['predicted_aqi'])
+            'worst_station': max(station_preds, key=lambda x: x['predicted_aqi']),
+            'best_station': min(station_preds, key=lambda x: x['predicted_aqi'])
         }
 
-class CityStations(Resource):
-    def get(self, city):
-        """Get all stations available for a city"""
+# ***
+# *** RE-WRITTEN: DebugData (Fix for Failure 4 & Logic Error) ***
+# ***
+class DebugData(Resource):
+
+    def _safe_strftime(self, date_val, default='N/A (No Date)'):
+        """Helper to safely format dates that might be NaT"""
+        if pd.isna(date_val):
+            return default
         try:
-            global historical_data, system_initialized
+            return date_val.strftime('%Y-%m-%d')
+        except Exception:
+            return default
+
+    def get(self, city):
+        """Debug endpoint to check available data for a city"""
+        try:
+            global historical_data
             
             if not system_initialized:
                 return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
-                
+            
             if historical_data is None:
-                return {'error': 'No historical data available'}, 404
+                return {'error': 'No historical data loaded'}, 404
             
-            # Get all stations for the city
-            stations = predictor._get_city_stations(city, historical_data)
+            # *** FIX: Use correct normalization ***
+            canonical_city = predictor._normalize_city(city)
             
-            # Get station statistics
-            station_stats = []
-            for station_info in stations:
-                station_name = station_info.get('station_name', 'Unknown')
-                station_id = station_info.get('station_id', 'Unknown')
-                
-                # Try to find station data using multiple identifier columns
-                station_data = None
-                station_cols = ['Station', 'StationName', 'Site', 'Location', 'StationId']
-                
-                for col in station_cols:
-                    if col in historical_data.columns:
-                        station_mask = (historical_data['City'] == city) & (historical_data[col] == station_name)
-                        if not station_mask.any():
-                            station_mask = (historical_data['City'] == city) & (historical_data[col] == station_id)
-                        
-                        if station_mask.any():
-                            station_data = historical_data[station_mask]
-                            break
-                
-                if station_data is not None and len(station_data) > 0:
-                    stats = {
-                        'station_id': station_id,
-                        'station_name': station_name,
-                        'records_count': len(station_data),
-                        'date_range': {
-                            'start': station_data['Date'].min().strftime('%Y-%m-%d') if 'Date' in station_data.columns else 'Unknown',
-                            'end': station_data['Date'].max().strftime('%Y-%m-%d') if 'Date' in station_data.columns else 'Unknown'
-                        },
-                        'avg_aqi': round(station_data['AQI'].mean(), 2) if 'AQI' in station_data.columns else 0,
-                        'data_completeness': round((station_data.notna().sum() / len(station_data)).mean() * 100, 1)
-                    }
-                    station_stats.append(stats)
+            if not canonical_city:
+                return {'error': f"City '{city}' not found or not supported."}, 404
             
-            return _to_native({
-                'city': city,
-                'total_stations': len(stations),
-                'stations': stations,
-                'station_statistics': station_stats
-            })
+            # *** FIX: Use fast, exact match on normalized column ***
+            city_data = historical_data[historical_data['City'] == canonical_city]
+            
+            # *** FIX for Failure 4: Use safe date formatting ***
+            start_date = city_data['Date'].min() if 'Date' in city_data.columns else pd.NaT
+            end_date = city_data['Date'].max() if 'Date' in city_data.columns else pd.NaT
+
+            response = {
+                'city_requested': city,
+                'city_normalized': canonical_city,
+                'total_records': len(city_data),
+                'date_range': {
+                    'start': self._safe_strftime(start_date),
+                    'end': self._safe_strftime(end_date)
+                },
+                'available_columns': list(city_data.columns) if len(city_data) > 0 else [],
+                'stations_available': city_data['Station'].nunique() if len(city_data) > 0 and 'Station' in city_data.columns else 0,
+                'sample_data': _to_native(city_data.head(3).to_dict('records')) if len(city_data) > 0 else []
+            }
+            
+            return response
             
         except Exception as e:
-            app.logger.error(f"Error in CityStations: {str(e)}")
+            app.logger.error(f"Error in DebugData: {str(e)}")
             return {'error': str(e)}, 500
+
+# Register the debug endpoint
+api.add_resource(DebugData, '/api/debug/<string:city>')
+
+# ***
+# *** RE-WRITTEN: CityStations (Fix for Failure 6 & Logic Error) ***
+# ***
+class CityStations(Resource):
+    def get(self, city):
+        """Get all stations available for a city from the metadata"""
+        try:
+            global system_initialized
+            
+            if not system_initialized:
+                return {'error': 'System not initialized. Please call /api/initialize first.'}, 503
+            
+            # *** FIX: This logic is now clean and correct ***
+            # It relies on predictor._get_city_stations, which is now the single source of truth
+            stations = predictor._get_city_stations(city)
+            
+            return _to_native({
+                'city': predictor._normalize_city(city) or city, # Return canonical city
+                'city_requested': city,
+                'total_stations': len(stations),
+                'stations': stations
+            })
+            
+        # *** FIX for Failure 5: Catch specific ValueErrors (e.g., "City not found") ***
+        except ValueError as ve:
+            app.logger.warning(f"CityStations failed for {city}: {str(ve)}")
+            return {'error': str(ve)}, 404 # Return 404 Not Found
+
+        except Exception as e:
+            app.logger.error(f"Error in CityStations: {str(e)}")
+            return {'error': 'An internal server error occurred'}, 500
 
 # Register the new endpoints in your app.py (add these lines to the API routing section)
 api.add_resource(StationPredictions, '/api/predict/stations')
 api.add_resource(CityStations, '/api/cities/<string:city>/stations')
+
 # Initialize system on startup
 if __name__ == '__main__':
     import sys
@@ -879,7 +966,7 @@ if __name__ == '__main__':
         logger.error("Auto-initialization failed: %s", str(e))
         logger.info("You can manually initialize via POST /api/initialize")
     
-    # Run the application with minimal output
+    # Run the application
     logger.info("Server starting on http://0.0.0.0:5000")
     
     # Use werkzeug logging
