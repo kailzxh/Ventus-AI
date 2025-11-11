@@ -1,7 +1,130 @@
-# Create or edit .gitignore in your project root
-echo "Ventus AI/backend/data/raw/india-aqi-2015-2020/city_hour.csv" >> .gitignore
-echo "Ventus AI/backend/data/raw/india-aqi-2015-2020/station_hour.csv" >> .gitignore
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+pip-wheel-metadata/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
 
-# Also add patterns to ignore future large data files
-echo "*.csv" >> "Ventus AI/backend/data/raw/.gitignore"
-echo "*.csv" >> "Ventus AI/backend/data/raw/india-aqi-2015-2020/.gitignore"
+# Virtual environments
+venv/
+env/
+ENV/
+.venv/
+env.bak/
+venv.bak/
+
+# Flask
+instance/
+.webassets-cache
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# Data files - Training data and models
+data/raw/
+data/processed/
+data/interim/
+*.csv
+*.json
+*.xlsx
+*.parquet
+*.feather
+*.pkl
+*.pickle
+*.h5
+*.hdf5
+*.joblib
+*.pth
+*.pt
+*.model
+
+# MLFlow
+mlruns/
+mlflow/
+
+# Jupyter Notebook
+.ipynb_checkpoints
+*.ipynb
+
+# PyCharm
+.idea/
+*.iws
+*.iml
+*.ipr
+
+# VS Code
+.vscode/
+*.code-workspace
+
+# Environment variables
+.env
+.env.local
+.env.production
+.env.development
+.flaskenv
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Coverage reports
+htmlcov/
+.coverage
+.coverage.*
+coverage.xml
+*.cover
+
+# Training checkpoints
+checkpoints/
+training_checkpoints/
+runs/
+experiments/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Large model files
+*.bin
+*.safetensors
+*.ot
+*.msgpack
+
+# Cache
+.cache
+.pytest_cache
+.mypy_cache
