@@ -1,0 +1,62 @@
+    /* frontend/src/App.css */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Custom styles */
+.aqi-gradient-good {
+  background: linear-gradient(135deg, #10B981, #34D399);
+}
+
+.aqi-gradient-moderate {
+  background: linear-gradient(135deg, #F59E0B, #FBBF24);
+}
+
+.aqi-gradient-poor {
+  background: linear-gradient(135deg, #EF4444, #F87171);
+}
+
+.aqi-gradient-severe {
+  background: linear-gradient(135deg, #DC2626, #EF4444);
+}
+
+/* Loading animations */
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+.animate-pulse {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+/* Custom scrollbar */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: #c1c1c1;
+  border-radius: 3px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #a8a8a8;
+}
+
+/* Chart tooltip customization */
+.recharts-tooltip-wrapper {
+  z-index: 1000;
+}
+
+/* Leaflet map container */
+.leaflet-container {
+  height: 100%;
+  width: 100%;
+  border-radius: 0.5rem;
+}

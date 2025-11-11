@@ -1,0 +1,56 @@
+{
+  "models": {
+    "random_forest": {
+      "RMSE": 84.55315155837405,
+      "MAE": 48.625670382029135,
+      "R2": 0.6318593146153553,
+      "MSE": 7149.235438453374
+    },
+    "gradient_boosting": {
+      "RMSE": 83.54660667302842,
+      "MAE": 47.909649072522356,
+      "R2": 0.6405720485554798,
+      "MSE": 6980.035486577717
+    },
+    "nf_vae": {
+      "RMSE": 145.01668710563862,
+      "MAE": 126.31989989866712,
+      "R2": -0.0016758164263315223,
+      "MSE": 21029.839539094697
+    }
+  },
+  "training_info": {
+    "timestamp": "2025-11-09T22:20:46.155693",
+    "dataset_size": 2149348,
+    "clean_data_size": 2149348,
+    "features_used": 13,
+    "models_trained": [
+      "random_forest",
+      "gradient_boosting"
+    ],
+    "nf_vae_available": true
+  },
+  "feature_info": {
+    "total_features": 13,
+    "feature_list": [
+      "PM2.5",
+      "PM10",
+      "NO2",
+      "SO2",
+      "CO",
+      "O3",
+      "IsWeekend",
+      "City_Encoded",
+      "NO",
+      "NOx",
+      "NH3",
+      "Benzene",
+      "Toluene"
+    ],
+    "data_quality": {
+      "original_samples": 2740548,
+      "processed_samples": 2149348,
+      "training_samples": 1719478
+    }
+  }
+}
