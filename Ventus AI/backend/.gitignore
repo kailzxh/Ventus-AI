@@ -1,5 +1,16 @@
 # Python
-__pycache__/
+
+# Large CSV data files
+data/raw/india-aqi-2015-2020/city_hour.csv
+data/raw/india-aqi-2015-2020/station_hour.csv
+
+# Or ignore the entire directory
+data/raw/india-aqi-2015-2020/
+
+# Also add broader patterns for safety
+data/raw/*.csv
+data/raw/**/*.csv
+__pycac
 *.py[cod]
 *$py.class
 *.so
