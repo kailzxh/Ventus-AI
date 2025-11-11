@@ -1,0 +1,7 @@
+# Create or edit .gitignore in your project root
+echo "Ventus AI/backend/data/raw/india-aqi-2015-2020/city_hour.csv" >> .gitignore
+echo "Ventus AI/backend/data/raw/india-aqi-2015-2020/station_hour.csv" >> .gitignore
+
+# Also add patterns to ignore future large data files
+echo "*.csv" >> "Ventus AI/backend/data/raw/.gitignore"
+echo "*.csv" >> "Ventus AI/backend/data/raw/india-aqi-2015-2020/.gitignore"
